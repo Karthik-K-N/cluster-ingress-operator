@@ -23,8 +23,26 @@ var (
 	defaultCISRecordTTL              = int64(120)
 )
 
+const (
+	// CISCustomEndpointName is the key used to identify the CIS service in ServiceEndpoints
+	CISCustomEndpointName = "cis"
+	defaultCISURL         = "https://api.cis.cloud.ibm.com/"
+)
+
 type Provider struct {
 	dnsServices map[string]dnsclient.DnsClient
+}
+
+// ServiceEndpoint stores the configuration of a custom url to
+// override existing defaults of IBM Service API endpoints.
+type ServiceEndpoint struct {
+	// name is the name of the Power VS service.
+	// For example
+	// IAM - https://cloud.ibm.com/apidocs/iam-identity-token-api
+	Name string
+	// url is fully qualified URI with scheme https, that overrides the default generated
+	// endpoint for a client.
+	URL string
 }
 
 // Config is the necessary input to configure the manager.
@@ -33,6 +51,8 @@ type Config struct {
 	CISCRN    string
 	UserAgent string
 	Zones     []string
+	// ServiceEndpoints is the list of Custom API endpoints to use for Provider clients.
+	ServiceEndpoints []ServiceEndpoint
 }
 
 func NewProvider(config Config) (*Provider, error) {
@@ -49,7 +69,7 @@ func NewProvider(config Config) (*Provider, error) {
 	for _, zone := range config.Zones {
 		options := &dnsrecordsv1.DnsRecordsV1Options{
 			Authenticator:  authenticator,
-			URL:            "https://api.cis.cloud.ibm.com/",
+			URL:            getCISEndpointURL(config.ServiceEndpoints),
 			Crn:            &config.CISCRN,
 			ZoneIdentifier: &zone,
 		}
@@ -215,4 +235,14 @@ func validateInputDNSData(record *iov1.DNSRecord, zone configv1.DNSZone) error {
 	}
 	return kerrors.NewAggregate(errs)
 
+}
+
+// getCISEndpointURL return the IBM CIS url from service endpoins if exist or else returns the default url
+func getCISEndpointURL(endpoint []ServiceEndpoint) string {
+	for _, ep := range endpoint {
+		if ep.Name == CISCustomEndpointName {
+			return ep.URL
+		}
+	}
+	return defaultCISURL
 }
